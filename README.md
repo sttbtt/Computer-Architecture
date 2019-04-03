@@ -24,7 +24,7 @@
       filename passed in as an argument
 - [ ] Implement a Multiply instruction and Print the result (run `mult8.ls8`)
 
-### Day 3; Stack
+### Day 3: Stack
 
 - [ ] Implement the System Stack and be able to run the `stack.ls8` program
 
