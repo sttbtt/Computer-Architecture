@@ -7,16 +7,23 @@ struct cpu {
   // PC
   unsigned char PC;
   unsigned char SP;
+  unsigned char FL;
   // registers (array)
   unsigned char reg[8];
   // ram (array)
   unsigned char ram[256];
 };
 
+// The SP points at address `F4` if the stack is empty.
+#define SP 5
+
 // ALU operations
 enum alu_op {
+  ALU_ADD,
+  ALU_SUB,
 	ALU_MUL,
-  ALU_ADD
+  ALU_DIV
+  
 	// Add more here
 };
 
@@ -28,9 +35,16 @@ enum alu_op {
 #define LDI  0b10000010
 #define HLT  0b00000001
 #define PRN  0b01000111
-#define MUL  0b10100010
 #define PUSH 0b01000101
 #define POP  0b01000110
+#define CALL 0b01010000
+#define RET  0b00010001
+
+#define ADD  0b10100000
+#define SUB  0b10100001
+#define MUL  0b10100010
+#define DIV  0b10100011
+
 // TODO: more instructions here. These can be used in cpu_run().
 
 // Function declarations

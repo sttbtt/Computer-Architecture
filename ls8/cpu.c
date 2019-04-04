@@ -15,6 +15,19 @@ void cpu_ram_write(struct cpu *cpu, unsigned char address, unsigned char value)
   cpu->ram[address] = value;
 }
 
+void cpu_push(struct cpu *cpu, unsigned char value)
+{
+  cpu->reg[SP]--;
+  cpu->ram[cpu->reg[SP]] = value;
+}
+
+unsigned char cpu_pop(struct cpu *cpu)
+{
+  unsigned char value = cpu->ram[cpu->reg[SP]];
+  cpu->reg[SP]++;
+  return value;
+}
+
 void trace(struct cpu *cpu)
 {
     printf("%02X | ", cpu->PC);
@@ -38,7 +51,7 @@ void cpu_load(struct cpu *cpu, int argc, char *argv[])
 {
   FILE *fp;
   char line[1024];
-  int address = 0;
+  int address = 0x00;
 
   if (argc != 2) {
       printf("usage: ls8 filename\n");
@@ -53,17 +66,15 @@ void cpu_load(struct cpu *cpu, int argc, char *argv[])
     }
 
     while (fgets(line, 1024, fp) != NULL) {
-        // printf("%s", line);
         char *endptr;
         unsigned char val = strtoul(line, &endptr, 2);
         if (line == endptr) {
-            printf("SKIPPING: %s", line);
+            // printf("SKIPPING: %s", line);
             continue;
         }
-        // printf("%02x\n", val);
 
         // store in memory
-        cpu->ram[++address] = val;
+        cpu->ram[address++] = val;
     }
 
     fclose(fp);
@@ -75,16 +86,24 @@ void cpu_load(struct cpu *cpu, int argc, char *argv[])
 void alu(struct cpu *cpu, enum alu_op op, unsigned char regA, unsigned char regB)
 {
   unsigned char *reg = cpu->reg;
-
   switch (op) {
-    case ALU_MUL:
-      // TODO
-      reg[regA] *= reg[regB];
-      break;
+
     case ALU_ADD:
       reg[regA] += reg[regB];
       break;
+    
+    case ALU_SUB:
+      reg[regA] -= reg[regB];
+      break;
 
+    case ALU_MUL:
+      reg[regA] *= reg[regB];
+      break;
+
+    case ALU_DIV:
+      reg[regA] /= reg[regB];
+      break;
+    
     // TODO: implement more ALU ops
   }
 }
@@ -102,11 +121,12 @@ void cpu_run(struct cpu *cpu)
     unsigned char IR = cpu->ram[cpu->PC];
 
     // 2. Figure out how many operands this next instruction requires
-    unsigned int n_operands = IR >> DATA_LEN;
+    unsigned int operands = IR >> DATA_LEN;
+    // printf("Operands: %d, IR: %d\n", operands, IR);
 
     // 3. Get the appropriate value(s) of the operands following this instruction
-    unsigned char operandA = cpu->ram[cpu->PC + 1];
-    unsigned char operandB = cpu->ram[cpu->PC + 2];
+    unsigned char operandA = cpu->ram[(cpu->PC + 1)];
+    unsigned char operandB = cpu->ram[(cpu->PC + 2)];
 
     // 4. switch() over it to decide on a course of action.
     // 5. Do whatever the instruction should do according to the spec.
@@ -115,37 +135,67 @@ void cpu_run(struct cpu *cpu)
     {
       case LDI:
         cpu->reg[operandA] = operandB;
+        cpu->PC += operands + 1;
         break;
 
       case PRN:
         printf("%d\n", cpu->reg[operandA]);
+        cpu->PC += operands + 1;
+        break;
+
+      case ADD:
+        alu(cpu, ALU_ADD, operandA, operandB);
+        cpu->PC += operands + 1;
+        break;
+
+      case SUB:
+        alu(cpu, ALU_SUB, operandA, operandB);
+        cpu->PC += operands + 1;
         break;
 
       case MUL:
         alu(cpu, ALU_MUL, operandA, operandB);
+        cpu->PC += operands + 1;
+        break;
+
+      case DIV:
+        alu(cpu, ALU_DIV, operandA, operandB);
+        cpu->PC += operands + 1;
         break;
 
       case PUSH:
-        cpu->reg[cpu->SP]--;
-        cpu_ram_write(cpu, cpu->reg[cpu->SP], cpu->reg[operandA]);
+        cpu_push(cpu, cpu->reg[operandA]);
+        // cpu->reg[cpu->SP]--;
+        // cpu_ram_write(cpu, cpu->reg[cpu->SP], cpu->reg[operandA]);
+        cpu->PC += operands + 1;
         break;
 
       case POP:
-        cpu->reg[operandA & cpu->SP] = cpu_ram_read(cpu, cpu->reg[cpu->SP]);
-        cpu->reg[cpu->SP]++;
+        cpu->reg[operandA] = cpu_pop(cpu);
+        // cpu->reg[operandA & cpu->SP] = cpu_ram_read(cpu, cpu->reg[cpu->SP]);
+        // cpu->reg[cpu->SP]++;
+        cpu->PC += operands + 1;
+        break;
+
+      case CALL:
+        cpu_push(cpu, cpu->PC + 2);
+        cpu->PC = cpu->reg[operandA];
+        break;
+
+      case RET:
+        cpu->PC = cpu_pop(cpu);
         break;
 
       case HLT:
         running = 0;
         break;
-    
+
       default:
         break;
     }
 
     // 6. Move the PC to the next instruction.
-    cpu->PC += n_operands + 1;
-    
+    // cpu->PC += operands + 1;
   }
 }
 
@@ -156,7 +206,7 @@ void cpu_init(struct cpu *cpu)
 {
   // TODO: Initialize the PC and other special reg
   cpu->PC = 0;
-  cpu->SP = 7;
+  cpu->reg[SP] = 0xF4;
   memset(cpu->reg, 0, sizeof(cpu->reg));
   memset(cpu->ram, 0, sizeof(cpu->ram));
 }
